@@ -1,0 +1,78 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.fftpack as ft
+import scipy.signal as sig
+
+# 1. 伝達関数  
+a = np.array([1., 0.0, 0.8])
+b = np.array([1.])
+w, h = sig.freqz(b, a)
+plt.figure(); plt.title('1')
+plt.plot(w/np.pi, 20*np.log10(abs(h))), plt.xlabel('Normalized frequency'), plt.ylabel('dB')
+
+
+# 2. AR 過程の生成  
+N = 8000
+x = np.random.standard_normal(N)
+y = sig.lfilter(b, a, x)
+plt.figure(); plt.title('2')
+plt.plot(y[:100]); plt.xlabel('Normalized frequency')
+
+
+NFFT = 512
+win   = np.hamming(NFFT)
+frame = 0
+t1, t2 = NFFT*frame, NFFT*frame + NFFT
+
+# 3. 入力・出力スペクトル
+X = ft.fft(x[t1:t2]*win, NFFT)
+Y = ft.fft(y[t1:t2]*win, NFFT)
+freq = np.linspace(0.0, 1.0, num=NFFT//2 + 1)
+
+plt.figure(); plt.title('3_1')
+plt.plot(freq, np.abs(X[:NFFT//2+1])) 
+plt.xlabel('Frequency[Hz]')
+plt.figure(); plt.title('3_2')
+plt.plot(freq, np.abs(Y[:NFFT//2+1]))
+plt.xlabel('Frequency[Hz]')
+
+
+# 4. クロススペクトル法による 自己回帰モデルの伝達関数推定
+Wxy = np.conj(X) * Y
+Wxx = np.conj(X) * X
+H  = Wxy / Wxx
+plt.figure(); plt.title('4')
+plt.plot(freq, 20*np.log10(abs(H[:NFFT//2+1])))
+plt.xlabel('Frequency [Hz]')
+
+
+# 5. 移動平均を用いた平滑化
+L = 5                             
+kernel = np.ones(L) / L
+H_smooth = np.convolve(H, kernel, mode='same')
+plt.figure(); plt.title('5')
+plt.plot(freq, 20*np.log10(abs(H_smooth[:NFFT//2+1])))
+plt.xlabel('Frequency [Hz]')
+
+# 6. y に観測ノイズを加えた場合の効果確認
+sigma = 0.1
+y_noisy = y + sigma * np.random.standard_normal(N)
+Y_n = ft.fft(y_noisy[t1:t2]*win, NFFT)
+Wxy_n = np.conj(X) * Y_n
+H_n = Wxy_n / Wxx
+H_n_smooth = np.convolve(H_n, kernel, mode='same')
+
+plt.figure(); plt.title('6')
+plt.plot(freq, 20*np.log10(abs(H_n[:NFFT//2+1])))
+plt.xlabel('Frequency [Hz]')
+
+
+# 7. 極をプロット  
+poles = np.roots(a)
+theta = np.linspace(0, 2*np.pi, 400)
+plt.figure(); plt.title('7. Pole plot')
+plt.plot(np.cos(theta), np.sin(theta), 'k--')           
+plt.scatter(poles.real, poles.imag, marker='x', color='r')
+plt.axis('equal'); plt.ylabel('Im')
+
+plt.tight_layout(); plt.show()
